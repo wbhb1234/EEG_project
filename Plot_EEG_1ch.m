@@ -3,7 +3,8 @@ function Plot_EEG_1ch (argu)
 flag = 1;
 sLine =1;
 baseTime = 0;
-packetlen=252;
+packetlen=169;
+Gain = 0.03125;
 mu=0.01;
 bp_flag=0;
 YData1=0;
@@ -103,7 +104,14 @@ delete(itemsToolbar([2:9,13,14:17]));
         global oldrecdat
         global s
         global a;
-        packetlen=252;
+        packetlen=89;
+%   // ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 0.1875mV (default)
+%   // ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 0.125mV
+%   // ads.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 0.0625mV
+%   // ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
+%   // ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.015625mV
+%   // ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.0078125mV
+        Gain = 0.015625;
         flag =1;
         sLine =1;
         baseTime = 0;
@@ -130,7 +138,7 @@ delete(itemsToolbar([2:9,13,14:17]));
         set(s, 'Parity', 'none');
         set(s, 'DataBits', 8);
         set(s, 'StopBit', 1);
-        set(s, 'Timeout',2);
+        set(s, 'Timeout',5);
 
          s.BytesAvailableFcnMode ='byte';
          s.BytesAvailableFcnCount = packetlen;
@@ -160,9 +168,9 @@ delete(itemsToolbar([2:9,13,14:17]));
          sLine = sLine + 1;
          %多发几遍 防止没接受到
          pause(1);
-         fprintf(s,'%c','ccc');
-         pause(0.2);
-         fprintf(s,'%c','ccc');
+%          fprintf(s,'%c','ccc');
+%          pause(0.2);
+%          fprintf(s,'%c','ccc');
          %% start data collection
          while(flag)
              try
@@ -179,28 +187,29 @@ delete(itemsToolbar([2:9,13,14:17]));
                          recdat = newrecdat(ind:ind+packetlen-1);
                      end
                  end
-                  a = recdat(4:2:end)*256 + recdat(3:2:end);
+                  a = recdat(4:2:end-1)*256 + recdat(3:2:end-1);
                         l = find(a>32768);
                         a(l) = a(l) - 65536;
                         a = reshape(a,1,[]);
                          
-                    val1(cnt:cnt+124)=a(1,:);
-                    fftData(m:m+124) = val1(cnt:cnt+124);
+                    val1(cnt:cnt+((packetlen-3)/2-1))=a(1,:);
+                    fftData(m:m+((packetlen-3)/2-1)) = val1(cnt:cnt+((packetlen-3)/2-1));
             
-                    cnt = cnt+125;
-                    m = m + 125;
-                     if m > 250
+                    cnt = cnt+((packetlen-3)/2);
+                    
+                    m = m + ((packetlen-3)/2-1);
+                     if m > (packetlen-3)
                          m=1;
                      end
                  % rms(n) = (max(a(3,:))-min(a(3,:)));
                  n = n+1; 
                  if n == 2
-                     tic
+                  %   tic
                      n=1;
                      
-                         result1 = val1*0.1875; result1 = result1';%resp  
+                         result1 = val1*Gain; result1 = result1';%resp  
                          % result4 = val4 / 1000; result3 = result3';%II
-                         fftData = fftData*0.1875; fftData = fftData';
+                         fftData = fftData*Gain; fftData = fftData';
                       
 %                       result1 = a(1,:)' ; result1 = result1';%resp
 %                       result2 = a(2,:)' ; result2 = result2';%I
@@ -229,12 +238,12 @@ delete(itemsToolbar([2:9,13,14:17]));
                 %   axes(ImgAx(4));cla(ImgAx(4)); hold on; plot(result4); xlim([cnt-1600,cnt+0]); grid on;
 
               
-                     sr1 = 250;
+                     sr1 = 128;
 %                      
                      filter_data1 = result1;  
 %                     
                     order    = 3;
-                    fcutlow  =0.5;
+                    fcutlow  =0.4;
                     fcuthigh = 35;
                     [d,c]    = butter(order,[fcutlow,fcuthigh]/(sr1/2), 'bandpass');
                      %     [d1,c1]    = butter(order,[fcutlow1,fcuthigh1]/(sr1/2), 'bandpass');
@@ -252,25 +261,27 @@ delete(itemsToolbar([2:9,13,14:17]));
                     filter_data1 = filter(b,c,filter_data1); %Notch filter removing 60 or 50 Hz, whichever is larger.
 
                    %FFT
-                     Fs = 250;
-                     N=1024;
+                     Fs = 128;
+                     N=2048;
                      NFFT = 2^nextpow2(N);
-                    fftData = fft(fftData,NFFT)/N;
+                     fftData = fft(fftData,NFFT)/N;
                      f = Fs/2*linspace(0,1,NFFT/2+1);
                      v = 2*abs(fftData(1:NFFT/2+1));
                %    [v f] = max(mag(1:50));
                     [ma,indx] = max(v);
                     set(FFTNumberTxt,'string',f(indx)); 
 %                     
-                    axes(ImgAx(1));cla(ImgAx(1)); hold on; plot(result1);ylim([-1000,1000]); xlim([cnt-750,cnt+0]);grid on;
-                    axes(ImgAx(3));cla(ImgAx(3)); hold on; plot(f,v); xlim([0,60]); grid on;
-                    axes(ImgAx(2));cla(ImgAx(2)); hold on; plot(filter_data1);ylim([-1800,1800]); xlim([cnt-750,cnt+0]); grid on;
+                   % axes(ImgAx(1));cla(ImgAx(1)); hold on; plot(result1);ylim([-50,50]); xlim([cnt-320,cnt+0]);grid on;
+                    axes(ImgAx(1));cla(ImgAx(1)); hold on; plot(result1);       xlim([cnt-320,cnt+0]);  grid on;
+                   % axes(ImgAx(2));cla(ImgAx(2)); hold on; plot(filter_data1);ylim([-50,50]); xlim([cnt-320,cnt+0]); grid on;
+                    axes(ImgAx(2));cla(ImgAx(2)); hold on; plot(filter_data1);  xlim([cnt-320,cnt+0]);  grid on;
+                    axes(ImgAx(3));cla(ImgAx(3)); hold on; plot(f,v); ylim([0,1]);xlim([0,60]); grid on;
 %                    axes(ImgAx(6));cla(ImgAx(6)); hold on; plot(filter_data2); xlim([cnt-2000,cnt+100]); grid on;
 %                    axes(ImgAx(7));cla(ImgAx(7)); hold on; plot(filter_data3); xlim([cnt-2000,cnt+100]); grid on;
 %                    axes(ImgAx(8));cla(ImgAx(8)); hold on; plot(filter_data4); xlim([cnt-2000,cnt+100]); grid on; 
                     refreshdata;
                     drawnow; 
-                    toc 
+                   % toc 
                  end
              end
          end
