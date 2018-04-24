@@ -3,7 +3,7 @@ function Plot_EEG_1ch (argu)
 flag = 1;
 sLine =1;
 baseTime = 0;
-packetlen=169;
+packetlen=134;
 Gain = 0.03125;
 mu=0.01;
 bp_flag=0;
@@ -104,14 +104,18 @@ delete(itemsToolbar([2:9,13,14:17]));
         global oldrecdat
         global s
         global a;
-        packetlen=89;
+        packetlen=134;
+      %  packetlen=252;
 %   // ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 0.1875mV (default)
 %   // ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 0.125mV
 %   // ads.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 0.0625mV
 %   // ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.03125mV
 %   // ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.015625mV
 %   // ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.0078125mV
-        Gain = 0.015625;
+  Gain = 0.0625;     
+%Gain = 0.015625;
+%Gain = 0.1875;
+        
         flag =1;
         sLine =1;
         baseTime = 0;
@@ -167,7 +171,7 @@ delete(itemsToolbar([2:9,13,14:17]));
          set(statusBar(modInd(sLine,3)), 'string', 'Running');pause(0.01);
          sLine = sLine + 1;
          %多发几遍 防止没接受到
-         pause(1);
+%          pause(1);
 %          fprintf(s,'%c','ccc');
 %          pause(0.2);
 %          fprintf(s,'%c','ccc');
@@ -175,10 +179,10 @@ delete(itemsToolbar([2:9,13,14:17]));
          while(flag)
              try
                 recdat = fread(s,packetlen);
-                 if(recdat(1)~=85 || recdat(2)~=170)
+                 if(recdat(1)~=170 || recdat(2)~=85)
                      newrecdat = [oldrecdat;recdat];
                      oldrecdat = recdat;
-                     ind = strfind(newrecdat',[85 170]);
+                     ind = strfind(newrecdat',[170 85]);
                      
                      if(isempty(ind))
                          return;
@@ -187,18 +191,22 @@ delete(itemsToolbar([2:9,13,14:17]));
                          recdat = newrecdat(ind:ind+packetlen-1);
                      end
                  end
-                  a = recdat(4:2:end-1)*256 + recdat(3:2:end-1);
+                  a = recdat(6:2:end-2)*256 + recdat(5:2:end-2);
+               %   a = recdat(4:2:end)*256 + recdat(3:2:end);
                         l = find(a>32768);
                         a(l) = a(l) - 65536;
                         a = reshape(a,1,[]);
                          
-                    val1(cnt:cnt+((packetlen-3)/2-1))=a(1,:);
-                    fftData(m:m+((packetlen-3)/2-1)) = val1(cnt:cnt+((packetlen-3)/2-1));
-            
-                    cnt = cnt+((packetlen-3)/2);
+                    val1(cnt:cnt+((packetlen-6)/2-1))=a(1,:);
+                   % val1(cnt:cnt+((packetlen-3)/2))=a(1,:);
                     
-                    m = m + ((packetlen-3)/2-1);
-                     if m > (packetlen-3)
+                    fftData(m:m+((packetlen-6)/2-1)) = val1(cnt:cnt+((packetlen-6)/2-1));
+                   % fftData(m:m+((packetlen-3)/2)) = val1(cnt:cnt+((packetlen-3)/2));
+                    cnt = cnt+((packetlen-6)/2);
+                    
+                    m = m + ((packetlen-6)/2-1);
+                   %   m = m + ((packetlen-3)/2);
+                     if m > (packetlen-6)
                          m=1;
                      end
                  % rms(n) = (max(a(3,:))-min(a(3,:)));
@@ -206,7 +214,6 @@ delete(itemsToolbar([2:9,13,14:17]));
                  if n == 2
                   %   tic
                      n=1;
-                     
                          result1 = val1*Gain; result1 = result1';%resp  
                          % result4 = val4 / 1000; result3 = result3';%II
                          fftData = fftData*Gain; fftData = fftData';
@@ -240,14 +247,16 @@ delete(itemsToolbar([2:9,13,14:17]));
               
                      sr1 = 128;
 %                      
-                     filter_data1 = result1;  
-%                     
+                     filter_data1 = result1; 
+                     filter_data2 = fftData;
+%                    
                     order    = 3;
-                    fcutlow  =0.4;
-                    fcuthigh = 35;
+                    fcutlow  =0.35;
+                    fcuthigh = 45;
                     [d,c]    = butter(order,[fcutlow,fcuthigh]/(sr1/2), 'bandpass');
                      %     [d1,c1]    = butter(order,[fcutlow1,fcuthigh1]/(sr1/2), 'bandpass');
                     filter_data1 =  filter(d,c,filter_data1);
+                    filter_data2 =  filter(d,c,filter_data2);
 %                     
                    % frequency = 50; 
                     b = zeros(3,1); 
@@ -259,27 +268,38 @@ delete(itemsToolbar([2:9,13,14:17]));
                     c(2) = -2*0.93*cos(2*pi*50/sr1);
                     c(3) = 0.93^2;
                     filter_data1 = filter(b,c,filter_data1); %Notch filter removing 60 or 50 Hz, whichever is larger.
-
-                   %FFT
+                    filter_data2 = filter(b,c,filter_data2); %Notch filter removing 60 or 50 Hz, whichever is larger.
+                    
+                    % axes(ImgAx(1));cla(ImgAx(1)); hold on; plot(result1);ylim([-50,50]); xlim([cnt-320,cnt+0]);grid on;
+                    axes(ImgAx(1));cla(ImgAx(1)); hold on; plot(result1);ylim([-2500,2500]);xlim([cnt-320,cnt+0]);  grid on;
+                   % axes(ImgAx(2));cla(ImgAx(2)); hold on; plot(filter_data1);ylim([-50,50]); xlim([cnt-320,cnt+0]); grid on;
+                    axes(ImgAx(2));cla(ImgAx(2)); hold on; plot(filter_data1);ylim([-2500,2500]);xlim([cnt-320,cnt+0]);  grid on;
+                   % ylim([-80,80]); 
+                    
+%                     fftData2 = filter_data1(cnt-96:cnt);
+%                     fftData2 = fftData2';
+%                     fftData2(index:index+96)=fftData2;
+%                     index=1;
+                    
+                    %FFT
+                    %  fftData2(1:142) = filter_data1(cnt-142:cnt);
                      Fs = 128;
-                     N=2048;
+                     N=1024;
                      NFFT = 2^nextpow2(N);
-                     fftData = fft(fftData,NFFT)/N;
+                     filter_data2 = fft(filter_data2,NFFT)/N;
                      f = Fs/2*linspace(0,1,NFFT/2+1);
-                     v = 2*abs(fftData(1:NFFT/2+1));
+                     v = 2*abs(filter_data2(1:NFFT/2+1));
                %    [v f] = max(mag(1:50));
                     [ma,indx] = max(v);
                     set(FFTNumberTxt,'string',f(indx)); 
 %                     
-                   % axes(ImgAx(1));cla(ImgAx(1)); hold on; plot(result1);ylim([-50,50]); xlim([cnt-320,cnt+0]);grid on;
-                    axes(ImgAx(1));cla(ImgAx(1)); hold on; plot(result1);       xlim([cnt-320,cnt+0]);  grid on;
-                   % axes(ImgAx(2));cla(ImgAx(2)); hold on; plot(filter_data1);ylim([-50,50]); xlim([cnt-320,cnt+0]); grid on;
-                    axes(ImgAx(2));cla(ImgAx(2)); hold on; plot(filter_data1);  xlim([cnt-320,cnt+0]);  grid on;
-                    axes(ImgAx(3));cla(ImgAx(3)); hold on; plot(f,v); ylim([0,1]);xlim([0,60]); grid on;
+
+                     axes(ImgAx(3));cla(ImgAx(3)); hold on; plot(f,v);ylim([0,50]);xlim([0,60]); grid on;
+                    %ylim([0,1]);
 %                    axes(ImgAx(6));cla(ImgAx(6)); hold on; plot(filter_data2); xlim([cnt-2000,cnt+100]); grid on;
 %                    axes(ImgAx(7));cla(ImgAx(7)); hold on; plot(filter_data3); xlim([cnt-2000,cnt+100]); grid on;
 %                    axes(ImgAx(8));cla(ImgAx(8)); hold on; plot(filter_data4); xlim([cnt-2000,cnt+100]); grid on; 
-                    refreshdata;
+                   % refreshdata;
                     drawnow; 
                    % toc 
                  end
